@@ -62,8 +62,10 @@ function validateEvidencedItems(
     const evidenceIds = record.evidenceIds.filter(
       (id): id is string => typeof id === "string",
     );
-    if (evidenceIds.length === 0 ||
-        evidenceIds.some((id) => !allowedEvidenceIds.has(id))) {
+    if (evidenceIds.some((id) => !allowedEvidenceIds.has(id))) {
+      throw new Error("AI output references unsupported evidence");
+    }
+    if (evidenceIds.length === 0) {
       throw new Error("Every AI observation must reference supplied evidence");
     }
     return { text: record.text, evidenceIds: [...new Set(evidenceIds)] };

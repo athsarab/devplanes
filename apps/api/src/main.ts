@@ -16,10 +16,12 @@ async function bootstrap() {
   const config = app.get(ConfigService);
 
   app.setGlobalPrefix("api/v1");
-  app.enableCors({
-    origin: config.get<string>("CORS_ORIGIN", "http://localhost:3000"),
-    credentials: true,
-  });
+  const corsOrigin = config
+    .get<string>("CORS_ORIGIN", "http://localhost:3000")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  app.enableCors({ origin: corsOrigin, credentials: true });
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalPipes(
     new ValidationPipe({
