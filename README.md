@@ -52,6 +52,70 @@ Set the server-only values from `.env.example`:
 The frontend does not receive these values. API routes require a DevScope bearer session plus the
 `X-DevScope-Workspace-ID` header. The session and workspace must belong to the same membership.
 
+## Real authentication setup
+
+Demo authentication is development-only. Production must set `NODE_ENV=production` and
+`NEXT_PUBLIC_AUTH_MODE=supabase`.
+
+In Supabase, create a project and enable:
+
+- Email/password authentication
+- Google provider
+- GitHub provider
+
+Add these Supabase redirect URLs:
+
+- `https://<cloudflare-domain>/auth/callback`
+- `http://localhost:3000/auth/callback`
+
+Frontend Cloudflare Pages variables:
+
+- `NEXT_PUBLIC_API_URL=https://<api-domain>/api/v1`
+- `NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable-key>`
+- `NEXT_PUBLIC_AUTH_MODE=supabase`
+
+Backend variables:
+
+- `SUPABASE_URL=https://<project-ref>.supabase.co`
+- `SUPABASE_ANON_KEY=<publishable-key>`
+- `SUPABASE_SERVICE_ROLE_KEY=<server-only-service-role-key>`
+- `CORS_ORIGIN=https://<cloudflare-domain>,http://localhost:3000`
+- `DATABASE_URL=<supabase transaction/session pooler URL>`
+- `DIRECT_URL=<supabase direct PostgreSQL URL>`
+
+Never expose `SUPABASE_SERVICE_ROLE_KEY`, GitHub private keys, Stripe secrets or AI API keys through
+`NEXT_PUBLIC_*` variables.
+
+## Cloudflare Pages deployment
+
+Cloudflare Pages build settings:
+
+- Build command: `npm run build:cloudflare`
+- Build output directory: `apps/web/out`
+- Node version: 22 or newer
+
+The frontend is statically exported. API requests go to the separately deployed NestJS backend.
+Configure Cloudflare Pages custom domains and CORS origins before enabling OAuth.
+
+## Backend deployment
+
+Build the NestJS container with:
+
+```powershell
+docker build -f Dockerfile.api -t devscope-api .
+docker run --env-file .env -p 3001:3001 devscope-api
+```
+
+Deploy the image to Oracle Cloud or another container host behind HTTPS. Use a managed Supabase
+PostgreSQL pooler for `DATABASE_URL` and a direct connection for migrations/DIRECT_URL.
+
+Apply migrations from a trusted CI environment:
+
+```powershell
+npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
+```
+
 ### Obtain GitHub App values
 
 1. Open GitHub → Settings → Developer settings → GitHub Apps → New GitHub App.

@@ -5,10 +5,14 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { SupabaseAuthService } from "./supabase-auth.service";
 
 @Injectable()
 export class DevScopeSessionGuard implements CanActivate {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly supabaseAuth: SupabaseAuthService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<{
@@ -26,18 +30,22 @@ export class DevScopeSessionGuard implements CanActivate {
       where: { sessionToken: token },
       include: { user: true },
     });
-    if (!session || session.expires <= new Date()) {
-      throw new UnauthorizedException("DevScope session is invalid or expired");
+    let userId: string;
+    if (session && session.expires > new Date()) {
+      userId = session.userId;
+    } else {
+      const authUser = await this.supabaseAuth.verifyAccessToken(token);
+      const identity = await this.supabaseAuth.resolveIdentity(authUser);
+      userId = identity.userId;
     }
-
-    request.devScopeUserId = session.userId;
+    request.devScopeUserId = userId;
 
     const workspaceId = request.headers["x-devscope-workspace-id"];
     if (typeof workspaceId === "string" && workspaceId.length > 0) {
       const membership = await this.prisma.membership.findUnique({
         where: {
           userId_organizationId: {
-            userId: session.userId,
+            userId,
             organizationId: workspaceId,
           },
         },

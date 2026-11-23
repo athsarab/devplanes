@@ -13,6 +13,7 @@
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.119.2",
     "@octokit/app": "16.1.4",
     "@octokit/auth-app": "8.3.1",
     "@octokit/rest": "22.0.1",

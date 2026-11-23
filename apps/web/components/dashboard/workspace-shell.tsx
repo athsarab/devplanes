@@ -11,6 +11,7 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { apiRequest, type Intelligence, type Repository } from "@/lib/dashboard-api";
 import { ensureDemoSession } from "@/lib/devscope-auth";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 const groups = [
   {
@@ -121,6 +122,20 @@ export function WorkspaceShell({ children }: Props) {
     setSearchOpen(true);
   }
 
+  async function signOut() {
+    if ((process.env.NEXT_PUBLIC_AUTH_MODE ?? "supabase") !== "demo") {
+      try {
+        await createSupabaseBrowserClient().auth.signOut();
+      } catch {
+        // Session cleanup below is still required if the provider request fails.
+      }
+    }
+    ["devscope_session_token", "devscope_workspace_id", "devscope_workspace_name", "devscope_user_name", "devscope_user_email"].forEach((key) =>
+      window.sessionStorage.removeItem(key),
+    );
+    router.push((process.env.NEXT_PUBLIC_AUTH_MODE ?? "supabase") === "demo" ? "/" : "/signin");
+  }
+
   const initials = userName.trim().split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
   const sidebarWidth = collapsed ? "72px" : "240px";
 
@@ -190,6 +205,7 @@ export function WorkspaceShell({ children }: Props) {
             {profileOpen ? <div className="absolute right-0 top-11 z-30 w-56 rounded-xl border border-[rgb(var(--line))] bg-[rgb(var(--surface))] p-1.5 shadow-xl shadow-black/10">
               <div className="border-b border-[rgb(var(--line))] px-2.5 py-2"><p className="truncate text-xs font-medium">{userName}</p><p className="mt-0.5 truncate text-[11px] text-[rgb(var(--muted))]">{email}</p></div>
               {settingsLinks.slice(2).map((item) => <Link key={item.href} href={item.href} onClick={() => setProfileOpen(false)} className="block rounded-md px-2.5 py-2 text-xs text-[rgb(var(--muted))] hover:bg-[rgb(var(--surface-raised))] hover:text-[rgb(var(--ink))]">{item.label}</Link>)}
+              <button type="button" onClick={() => void signOut()} className="mt-1 w-full rounded-md border-t border-[rgb(var(--line))] px-2.5 py-2 text-left text-xs text-rose-600 hover:bg-[rgb(var(--surface-raised))]">Sign out</button>
             </div> : null}
           </div>
         </div>

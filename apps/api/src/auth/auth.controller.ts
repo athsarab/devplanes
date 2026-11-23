@@ -2,17 +2,21 @@ import {
   Controller,
   ForbiddenException,
   Get, 
+  Body,
+  Headers,
   Post,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { randomBytes } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
+import { SupabaseAuthService } from "./supabase-auth.service";
 
 @Controller("auth")
 export class AuthController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly supabaseAuth: SupabaseAuthService,
   ) {}
 
   @Get("session")
@@ -23,12 +27,34 @@ export class AuthController {
     };
   }
 
+  @Post("signup")
+  async signup(
+    @Body("email") email: string,
+    @Body("password") password: string,
+    @Body("name") name?: string,
+  ) {
+    return this.supabaseAuth.signUp(email, password, name);
+  }
+
+  @Post("signin")
+  async signin(
+    @Body("email") email: string,
+    @Body("password") password: string,
+  ) {
+    return this.supabaseAuth.signIn(email, password);
+  }
+
+  @Post("session/bootstrap")
+  async bootstrap(@Headers("authorization") authorization: string) {
+    if (typeof authorization !== "string" || !authorization.startsWith("Bearer ")) {
+      throw new ForbiddenException("Bearer authentication session required");
+    }
+    return this.supabaseAuth.bootstrap(authorization.slice("Bearer ".length).trim());
+  }
+
   @Post("demo/session")
   async createDemoSession() {
-    if (
-      (this.config.get<string>("NODE_ENV") ?? "development") === "production" &&
-      this.config.get<string>("DEVSCAPE_DEMO_AUTH") !== "true"
-    ) {
+    if ((this.config.get<string>("NODE_ENV") ?? "development") === "production") {
       throw new ForbiddenException("Demo authentication is disabled");
     }
     if (this.config.get<string>("DEVSCAPE_DEMO_AUTH") === "false") {
