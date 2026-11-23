@@ -1,5 +1,6 @@
-import { OverviewScreen } from "@/components/dashboard/overview-screen";
+import { GitHubAnalyticsDashboard } from "@/components/dashboard/github-analytics-dashboard";
 
 export default function DashboardPage() {
-  return <OverviewScreen />;
-}
+  return <GitHubAnalyticsDashboard />;
+>;
+} 
