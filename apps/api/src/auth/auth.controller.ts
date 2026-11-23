@@ -1,7 +1,7 @@
 import {
   Controller,
   ForbiddenException,
-  Get,
+  Get, 
   Post,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
