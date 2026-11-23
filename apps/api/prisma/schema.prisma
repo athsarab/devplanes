@@ -1,0 +1,612 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum SyncStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum GitHubInstallationStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  UNINSTALLED
+}
+
+enum GitHubWebhookStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum RepositoryHealthStatus {
+  HEALTHY
+  WATCH
+  AT_RISK
+  UNKNOWN
+}
+
+enum PlanKey {
+  FREE
+  PRO
+  TEAM
+}
+
+enum SubscriptionStatus {
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+  PAUSED
+}
+
+enum BillingProvider {
+  STRIPE
+}
+
+enum BillingEventStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  name          String?
+  image         String?
+  emailVerified DateTime?
+  accounts      Account[]
+  sessions      Session[]
+  memberships   Membership[]
+  githubAccounts GitHubAccount[]
+  githubInstallationStates GitHubInstallationState[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refreshToken      String?
+  accessToken       String?
+  expiresAt         Int?
+  tokenType         String?
+  scope             String?
+  idToken           String?
+  sessionState      String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Organization {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  memberships Membership[]
+  repositories Repository[]
+  githubInstallations GitHubInstallation[]
+  subscription       Subscription?
+  entitlementOverrides EntitlementOverride[]
+  aiInsightRecords   AIInsightRecord[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([slug])
+}
+
+model Membership {
+  id             String         @id @default(cuid())
+  role           MembershipRole @default(MEMBER)
+  userId         String
+  organizationId String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+model Repository {
+  id             String        @id @default(cuid())
+  organizationId String
+  githubId       String        @unique
+  owner          String
+  name           String
+  fullName       String        @unique
+  defaultBranch  String        @default("main")
+  isPrivate      Boolean       @default(false)
+  archived       Boolean       @default(false)
+  stars          Int           @default(0)
+  forks          Int           @default(0)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  commits        Commit[]
+  pullRequests   PullRequest[]
+  issues         Issue[]
+  syncJobs       SyncJob[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  lastSyncedAt   DateTime?
+
+  @@unique([organizationId, fullName])
+  @@index([organizationId])
+  @@index([updatedAt])
+}
+
+model Commit {
+  id           String     @id @default(cuid())
+  repositoryId String
+  sha          String
+  message      String
+  authorName   String?
+  authorEmail  String?
+  additions    Int        @default(0)
+  deletions    Int        @default(0)
+  committedAt  DateTime
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([repositoryId, sha])
+  @@index([repositoryId, committedAt])
+}
+
+model PullRequest {
+  id           String     @id @default(cuid())
+  repositoryId String
+  githubId     String
+  number       Int
+  title        String
+  state        String
+  authorLogin  String?
+  additions    Int        @default(0)
+  deletions    Int        @default(0)
+  openedAt     DateTime
+  closedAt     DateTime?
+  mergedAt     DateTime?
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([repositoryId, githubId])
+  @@unique([repositoryId, number])
+  @@index([repositoryId, state])
+  @@index([repositoryId, openedAt])
+}
+
+model Issue {
+  id           String     @id @default(cuid())
+  repositoryId String
+  githubId     String
+  number       Int
+  title        String
+  state        String
+  authorLogin  String?
+  labels       Json       @default("[]")
+  openedAt     DateTime
+  closedAt     DateTime?
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([repositoryId, githubId])
+  @@unique([repositoryId, number])
+  @@index([repositoryId, state])
+  @@index([repositoryId, openedAt])
+}
+
+model SyncJob {
+  id           String     @id @default(cuid())
+  repositoryId String
+  status       SyncStatus @default(PENDING)
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  error        String?
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@index([repositoryId, createdAt])
+  @@index([status])
+}
+
+model GitHubAccount {
+  id             String   @id @default(cuid())
+  userId         String
+  githubUserId   BigInt   @unique
+  login          String
+  avatarUrl      String?
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model GitHubInstallation {
+  id             String                    @id @default(cuid())
+  installationId BigInt                    @unique
+  organizationId String
+  accountId      BigInt
+  accountLogin   String
+  accountType    String
+  status         GitHubInstallationStatus @default(PENDING)
+  repositorySelection String
+  suspendedAt    DateTime?
+  uninstalledAt  DateTime?
+  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  repositories   ConnectedRepository[]
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  @@index([organizationId, status])
+  @@index([accountId])
+}
+
+model ConnectedRepository {
+  id             String            @id @default(cuid())
+  installationId String
+  githubRepoId   BigInt            @unique
+  owner          String
+  name           String
+  fullName       String
+  description    String?
+  visibility     String
+  defaultBranch  String?
+  primaryLanguage String?
+  isArchived     Boolean           @default(false)
+  disconnectedAt DateTime?
+  installation   GitHubInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+  health         RepositoryHealth?
+  recentEvents   GitHubRecentEvent[]
+  issueSnapshots GitHubIssueSnapshot[]
+  pullRequestSnapshots GitHubPullRequestSnapshot[]
+  pullRequestTimelineEvents PullRequestLifecycleEvent[]
+  issueTimelineEvents IssueLifecycleEvent[]
+  bottleneckFindings DevelopmentBottleneckFinding[]
+  aiInsightRecords AIInsightRecord[]
+  releaseSnapshots GitHubReleaseSnapshot[]
+  healthSnapshots  RepositoryHealthSnapshot[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([installationId, githubRepoId])
+  @@index([installationId, disconnectedAt])
+  @@index([fullName])
+}
+
+model GitHubInstallationState {
+  id             String   @id @default(cuid())
+  stateHash      String   @unique
+  userId         String
+  organizationId String
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+
+  @@index([userId, organizationId])
+  @@index([expiresAt])
+}
+
+model GitHubWebhookEvent {
+  id             String              @id @default(cuid())
+  deliveryId     String              @unique
+  eventType      String
+  action         String?
+  installationId BigInt?
+  repositoryId   BigInt?
+  status         GitHubWebhookStatus @default(PENDING)
+  attempts       Int                 @default(0)
+  nextAttemptAt  DateTime            @default(now())
+  metadata       Json                @default("{}")
+  error          String?
+  receivedAt     DateTime            @default(now())
+  processedAt    DateTime?
+
+  @@index([status, nextAttemptAt])
+  @@index([eventType, receivedAt])
+  @@index([repositoryId])
+}
+
+model GitHubRecentEvent {
+  id             String            @id @default(cuid())
+  repositoryId   String
+  eventType      String
+  action         String?
+  deliveryId     String
+  title          String
+  description    String?
+  githubId       String?
+  occurredAt     DateTime
+  repository     ConnectedRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  createdAt      DateTime          @default(now())
+
+  @@unique([deliveryId, eventType])
+  @@index([repositoryId, occurredAt])
+  @@index([eventType, occurredAt])
+}
+
+model GitHubIssueSnapshot {
+  id             String            @id @default(cuid())
+  repositoryId   String
+  githubIssueId  BigInt
+  number         Int
+  title          String
+  state          String
+  authorLogin    String?
+  assigneeCount  Int               @default(0)
+  labels         Json              @default("[]")
+  githubCreatedAt DateTime
+  githubUpdatedAt DateTime
+  closedAt       DateTime?
+  repository     ConnectedRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([repositoryId, githubIssueId])
+  @@index([repositoryId, state])
+  @@index([githubUpdatedAt])
+}
+
+model GitHubPullRequestSnapshot {
+  id             String            @id @default(cuid())
+  repositoryId   String
+  githubPullId   BigInt
+  number         Int
+  title          String
+  state          String
+  draft          Boolean           @default(false)
+  authorLogin    String?
+  mergedAt       DateTime?
+  closedAt       DateTime?
+  githubCreatedAt DateTime
+  githubUpdatedAt DateTime
+  repository     ConnectedRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([repositoryId, githubPullId])
+  @@index([repositoryId, state])
+  @@index([githubUpdatedAt])
+}
+
+model GitHubReleaseSnapshot {
+  id             String            @id @default(cuid())
+  repositoryId   String
+  githubReleaseId BigInt
+  tagName        String
+  name           String?
+  draft          Boolean           @default(false)
+  prerelease     Boolean           @default(false)
+  publishedAt    DateTime?
+  githubCreatedAt DateTime
+  repository     ConnectedRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([repositoryId, githubReleaseId])
+  @@index([repositoryId, publishedAt])
+}
+
+model RepositoryHealth {
+  id             String                 @id @default(cuid())
+  repositoryId   String                 @unique
+  status         RepositoryHealthStatus @default(UNKNOWN)
+  score          Int                    @default(0)
+  unresolvedIssues Int                  @default(0)
+  stalePullRequests Int                 @default(0)
+  inactiveIssues Int                    @default(0)
+  pushes30d      Int                    @default(0)
+  activityTrend  String                 @default("unknown")
+  indicators     Json                   @default("[]")
+  explanations   Json                   @default("[]")
+  computedAt     DateTime               @default(now())
+  repository     ConnectedRepository    @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([status, score])
+}
+
+model RepositoryHealthSnapshot {
+  id             String   @id @default(cuid())
+  repositoryId   String
+  overallScore   Int
+  category       String
+  dimensions     Json
+  positiveFactors Json
+  negativeFactors Json
+  evidence       Json
+  recommendations Json
+  dataCompleteness Json
+  calculatedAt   DateTime @default(now())
+  repository     ConnectedRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId, calculatedAt])
+  @@index([category, calculatedAt])
+}
+
+model Subscription {
+  id                    String             @id @default(cuid())
+  organizationId        String             @unique
+  provider              BillingProvider    @default(STRIPE)
+  providerCustomerId    String?
+  providerSubscriptionId String?           @unique
+  plan                  PlanKey            @default(FREE)
+  status                SubscriptionStatus @default(ACTIVE)
+  cancelAtPeriodEnd     Boolean            @default(false)
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+  gracePeriodEndsAt     DateTime?
+  lastPaymentFailedAt   DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  organization          Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoices              InvoiceSnapshot[]
+
+  @@index([providerCustomerId])
+  @@index([status, currentPeriodEnd])
+}
+
+model EntitlementOverride {
+  id             String   @id @default(cuid())
+  organizationId String
+  feature        String
+  limitValue     Int?
+  enabled        Boolean?
+  reason         String?
+  expiresAt      DateTime?
+  createdAt      DateTime @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, feature])
+  @@index([expiresAt])
+}
+
+model BillingEvent {
+  id            String             @id @default(cuid())
+  provider      BillingProvider    @default(STRIPE)
+  providerEventId String           @unique
+  eventType     String
+  status        BillingEventStatus @default(RECEIVED)
+  payload       Json
+  error         String?
+  receivedAt    DateTime           @default(now())
+  processedAt   DateTime?
+
+  @@index([status, receivedAt])
+  @@index([eventType, receivedAt])
+}
+
+model InvoiceSnapshot {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  providerInvoiceId String @unique
+  status         String
+  amountDue      Int
+  amountPaid     Int
+  currency       String
+  paid           Boolean  @default(false)
+  hostedInvoiceUrl String?
+  paymentIntentStatus String?
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  createdAtProvider DateTime?
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([subscriptionId, paid])
+}
+
+model PullRequestLifecycleEvent {
+  id             String   @id @default(cuid())
+  repositoryId   String
+  pullRequestNumber Int
+  eventType      String
+  occurredAt     DateTime
+  sourceDeliveryId String
+  eventKey       String   @unique
+  metadata       Json     @default("{}")
+  historyComplete Boolean @default(false)
+  repository     ConnectedRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+
+  @@index([repositoryId, pullRequestNumber, occurredAt])
+  @@index([eventType, occurredAt])
+}
+
+model IssueLifecycleEvent {
+  id             String   @id @default(cuid())
+  repositoryId   String
+  issueNumber    Int
+  eventType      String
+  occurredAt     DateTime
+  sourceDeliveryId String
+  eventKey       String   @unique
+  metadata       Json     @default("{}")
+  historyComplete Boolean @default(false)
+  repository     ConnectedRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+
+  @@index([repositoryId, issueNumber, occurredAt])
+  @@index([eventType, occurredAt])
+}
+
+model DevelopmentBottleneckFinding {
+  id             String   @id @default(cuid())
+  repositoryId   String
+  findingType    String
+  severity       String
+  referenceType  String
+  referenceNumber Int?
+  findingKey     String   @unique
+  evidence       Json
+  detectedAt     DateTime
+  resolvedAt     DateTime?
+  active         Boolean  @default(true)
+  suggestedAction String
+  repository     ConnectedRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([repositoryId, active, detectedAt])
+  @@index([severity, active])
+  @@index([findingType, detectedAt])
+}
+
+model AIInsightRecord {
+  id             String   @id @default(cuid())
+  organizationId String
+  repositoryId   String
+  reportingStart DateTime
+  reportingEnd   DateTime
+  contextHash    String
+  provider       String
+  model          String
+  output         Json
+  evidenceIds    Json
+  generatedAt    DateTime @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  repository     ConnectedRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, repositoryId, contextHash])
+  @@index([organizationId, repositoryId, generatedAt])
+}
