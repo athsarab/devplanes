@@ -13,7 +13,14 @@ export default function HomePage() {
   const [opening, setOpening] = useState(false);
   async function enter() {
     setOpening(true); setError(null);
-    try { await ensureDemoSession(); router.push("/dashboard"); }
+    try {
+      if ((process.env.NEXT_PUBLIC_AUTH_MODE ?? "supabase") === "demo") {
+        await ensureDemoSession();
+        router.push("/dashboard");
+      } else {
+        router.push("/signin");
+      }
+    }
     catch (caught) { setError(caught instanceof Error ? caught.message : "DevScope could not start a session"); setOpening(false); }
   }
 
