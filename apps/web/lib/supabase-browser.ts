@@ -8,5 +8,11 @@ export function createSupabaseBrowserClient() {
   if (!url || !publishableKey) {
     throw new Error("Supabase authentication is not configured");
   }
-  return createBrowserClient(url, publishableKey);
+  return createBrowserClient(url, publishableKey, {
+    auth: {
+      experimental: {
+        appendPkceFlowIdToRedirects: true,
+      },
+    },
+  });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { bootstrapSupabaseSession } from "@/lib/devscope-auth";
@@ -8,8 +8,12 @@ import { bootstrapSupabaseSession } from "@/lib/devscope-auth";
 export default function AuthCallbackPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const started = useRef(false);
 
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+
     async function complete() {
       try {
         const params = new URLSearchParams(window.location.search);
