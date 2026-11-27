@@ -27,7 +27,10 @@ export default function SignUpPage() {
       const { data, error: authError } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
-        options: { data: { name: name.trim() } },
+        options: {
+          data: { name: name.trim() },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
       });
       if (authError) throw new Error(authError.message);
       if (!data.session) {
@@ -45,12 +48,16 @@ export default function SignUpPage() {
 
   async function oauth(provider: "github" | "google") {
     setError(null);
-    const supabase = createSupabaseBrowserClient();
-    const { error: authError } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
-    if (authError) setError(authError.message);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error: authError } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (authError) throw authError;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : `Unable to start ${provider} sign-in`);
+    }
   }
 
   return (

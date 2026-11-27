@@ -63,10 +63,15 @@ In Supabase, create a project and enable:
 - Google provider
 - GitHub provider
 
-Add these Supabase redirect URLs:
+In **Authentication → URL Configuration**, set the Site URL to the deployed frontend origin.
+Add these redirect URLs to the allow list:
 
 - `https://<cloudflare-domain>/auth/callback`
 - `http://localhost:3000/auth/callback`
+
+Configure the Google and GitHub OAuth applications with the callback URL shown for each provider
+in Supabase (the Supabase Auth callback URL, not the frontend callback URL). Email confirmation and
+OAuth return to the frontend's `/auth/callback` route.
 
 Frontend Cloudflare Pages variables:
 
@@ -87,17 +92,6 @@ Backend variables:
 Never expose `SUPABASE_SERVICE_ROLE_KEY`, GitHub private keys, Stripe secrets or AI API keys through
 `NEXT_PUBLIC_*` variables.
 
-## Cloudflare Pages deployment
-
-Cloudflare Pages build settings:
-
-- Build command: `npm run build:cloudflare`
-- Build output directory: `apps/web/out`
-- Node version: 22 or newer
-
-The frontend is statically exported. API requests go to the separately deployed NestJS backend.
-Configure Cloudflare Pages custom domains and CORS origins before enabling OAuth.
-
 ## Backend deployment
 
 Build the NestJS container with:
@@ -114,6 +108,64 @@ Apply migrations from a trusted CI environment:
 
 ```powershell
 npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
+```
+
+## Cloudflare OpenNext deployment
+
+The frontend is not statically exported. It runs as a Cloudflare Worker using the official
+`@opennextjs/cloudflare` adapter.
+
+Configure Cloudflare Workers Builds with:
+
+- Root directory: `apps/web`
+- Build command: `npm run build:cloudflare`
+- Deploy command: `npx wrangler deploy`
+- Node version: 22 or newer
+
+The root directory is important: Wrangler resolves the generated `.open-next` output relative to
+its working directory. If you keep the repository root as the Workers root, use
+`npm run deploy:cloudflare` as the deploy command instead; it runs the build and deploy from the
+web workspace.
+
+Local preview:
+
+```powershell
+npm run preview:cloudflare
+```
+
+Production build:
+
+```powershell
+npm run build:cloudflare
+```
+
+Deployment:
+
+```powershell
+npm run deploy:cloudflare
+```
+
+Generate Cloudflare environment types:
+
+```powershell
+npm run cf-typegen
+```
+
+Configure these public frontend variables in Cloudflare Worker variables or `.env.local`:
+
+- `NEXT_PUBLIC_API_URL`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_AUTH_MODE=supabase`
+
+Do not place backend secrets in `NEXT_PUBLIC_*` or Wrangler frontend variables. GitHub private keys,
+GitHub client secrets, Supabase service-role keys, Stripe secrets and AI keys belong only in the
+NestJS backend environment.
+
+The Supabase OAuth callback URL must include the deployed Worker or custom domain:
+
+```text
+https://<devscope-worker-domain>/auth/callback
 ```
 
 ### Obtain GitHub App values
