@@ -10,6 +10,9 @@
     "dev": "concurrently -n web,api -c cyan,magenta \"npm run dev -w apps/web\" \"npm run start:dev -w apps/api\"",
     "build": "npm run build -w apps/web && npm run build -w apps/api",
     "build:cloudflare": "npm run build:cloudflare -w apps/web",
+    "preview:cloudflare": "npm run preview -w apps/web",
+    "deploy:cloudflare": "npm run deploy -w apps/web",
+    "cf-typegen": "npm run cf-typegen -w apps/web",
     "lint": "npm run lint -w apps/web",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
@@ -18,6 +21,7 @@
     "prisma:studio": "npm run prisma:studio -w apps/api"
   },
   "devDependencies": {
-    "concurrently": "9.2.1"
+    "concurrently": "9.2.1",
+    "wrangler": "4.167.0"
   }
 }

@@ -4,6 +4,8 @@ dist/
 coverage/
 out/
 apps/web/out/
+.open-next/
+apps/web/.open-next/
 .env
 .env.local
 .env.*.local

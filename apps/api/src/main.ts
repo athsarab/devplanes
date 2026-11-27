@@ -31,9 +31,15 @@ async function bootstrap() {
     }),
   );
 
-  const port = config.get<number>("API_PORT", 3001);
-  await app.listen(port);
-  Logger.log(`DevScope API listening on http://localhost:${port}/api/v1`);
+  const port = Number(
+    config.get<string>("PORT") ?? config.get<string>("API_PORT") ?? 3001,
+  );
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("PORT or API_PORT must be a valid TCP port");
+  }
+
+  await app.listen(port, "0.0.0.0");
+  Logger.log(`DevScope API listening on 0.0.0.0:${port}/api/v1`);
 }
 
 bootstrap();
